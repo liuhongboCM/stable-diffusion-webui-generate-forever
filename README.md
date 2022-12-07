@@ -19,4 +19,4 @@ this is an extension for web-ui, which allows users to generate images forever a
 - Click 'Interrupt' Button if you want to interrupt a generating-forever process,but this won't interrupt other normal process.
 - Max number of generating-forever process is 1,if you want to make another generating-forever process, click 'Interrupt' Button first.
 - The parameter 'seed' is set to -1 in a  generating-forever process
-- use ImageBrowser(repo:https://github.com/yfszzx/stable-diffusion-webui-images-browser) to see all images in a generating-forever process
+- Use ImageBrowser(repo:https://github.com/yfszzx/stable-diffusion-webui-images-browser) to see all images in a generating-forever process
