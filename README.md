@@ -1,16 +1,16 @@
 # stable-diffusion-webui-generate-forever
 
-this is an extension for web-ui, which allows users to generate images forever and interrupt the task at anytime.
+This is an extension for web-ui, which allows users to generate images forever and interrupt the task at anytime.
 
 ## setup
 
 1. Download the zip![pic1](./READMEimgs/pic1.png)
 
-2. unzip the zip file to the project folder: ./extensions
+2. Unzip the zip file to the project folder: ./extensions
 
    ![pic2](./READMEimgs/pic2.png)
 
-3.run the project, if everything is ok,you would see the 'GenerateForever' option in the Dropdown UI 'script',select it and click 'Generate' Button,then you can see all generated images in Tab 'Image Browser'
+3.Run the project, if everything is ok,you would see the 'GenerateForever' option in the Dropdown UI 'script',select it and click 'Generate' Button,then you can see all generated images in Tab 'Image Browser'
 
 ![pic3](./READMEimgs/pic3.png)
 
