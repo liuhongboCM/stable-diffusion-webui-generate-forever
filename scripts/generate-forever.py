@@ -16,7 +16,6 @@ def forever(p):
         global isGeneratingForever
         while isGeneratingForever:
             time.sleep(0.1)
-            
             with queue_lock:
                shared.state.begin()
                p.seed = -1
@@ -38,8 +37,11 @@ class Script(scripts.Script):
     height = None
     cfgScale = None
     modelHash = None
+
+
     def handleInfoButtonClick(self):
-        return self.modelHash,self.prompt,self.negativePrompt,self.samplingSteps,self.samplerName,self.width,self.height,self.cfgScale
+        generateInfo = self.prompt + '\n' + "Negative prompt: " + self.negativePrompt + '\n' + "Steps: " + str(self.samplingSteps) + ', ' + "Sampler: " + self.samplerName + ', ' + "CFG scale: " + str(self.cfgScale) + ', ' + "Seed: " + '-1, ' + "Size: " + str(self.width) + 'x' + str(self.height) + ', ' + "Model hash: " + self.modelHash
+        return generateInfo
     def handleInterrupt(self):
         print("interrupt")
         global isGeneratingForever 
@@ -57,40 +59,21 @@ class Script(scripts.Script):
             with gr.Accordion("Generate Forever", open=True):
                 interruptButton = gr.Button(value = "Interrupt",elem_id = "interruptButton")
                 interruptButton.click(self.handleInterrupt,[],[])
-                modelHashText = gr.Text(label = "model hash",interactive = False,value = self.modelHash)
-                promptText = gr.Textbox(label = "prompt",interactive = False,value = self.prompt)
-                negativePromptText = gr.Textbox(label = "negative prompt",interactive = False,value = self.negativePrompt)
-                samplingStepsText = gr.Text(label = "sampling steps",interactive = False,value = self.samplingSteps)
-                samplerNameText = gr.Text(label = "sampler name",interactive = False,value = self.samplerName)
-                widthText = gr.Text(label = "width",interactive = False,value = self.width)
-                heightText = gr.Text(label = "height",interactive = False,value = self.height)
-                cfgScaleText = gr.Text(label = "cfgScale",interactive = False,value = self.cfgScale)
+                generateInfoText = gr.Text(label = "Generate Info",interactive = False)
                 infoButton = gr.Button(value = "Refresh forever info",variant = 'primary')
-                infoButton.click(self.handleInfoButtonClick,inputs = [],outputs = [modelHashText,promptText,negativePromptText,samplingStepsText,samplerNameText,widthText,heightText,cfgScaleText])
+                infoButton.click(self.handleInfoButtonClick,inputs = [],outputs = [generateInfoText])
 
 
                    
         return [
             interruptButton,
-            modelHashText,
-            promptText,
-            negativePromptText,
-            samplingStepsText,
-            samplerNameText,
-            widthText,
-            heightText,
-            cfgScaleText,
+            generateInfoText,
             infoButton
         ]
     
-    def run(self, p, interruptButton,modelHashText,
-            promptText,
-            negativePromptText,
-            samplingStepsText,
-            samplerNameText,
-            widthText,
-            heightText,
-            cfgScaleText,
+    def run(self, p, 
+            interruptButton,
+            generateInfoText,
             infoButton):
         print("p.prompt_first",p.prompt)
         print("p.negative_prompt",p.negative_prompt)
