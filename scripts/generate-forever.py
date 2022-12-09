@@ -11,6 +11,7 @@ logger.setLevel(logging.INFO)
 queue_lock = threading.Lock()
 isGeneratingForever = False
 numOfGeneratingForever = 0
+firstRes =None
 
 def forever(p):
         global isGeneratingForever
@@ -29,19 +30,9 @@ def forever(p):
 
 
 class Script(scripts.Script):
-    prompt = None
-    negativePrompt = None
-    samplingSteps = None
-    samplerName = None
-    width = None
-    height = None
-    cfgScale = None
-    modelHash = None
-
-
     def handleInfoButtonClick(self):
-        generateInfo = self.prompt + '\n' + "Negative prompt: " + self.negativePrompt + '\n' + "Steps: " + str(self.samplingSteps) + ', ' + "Sampler: " + self.samplerName + ', ' + "CFG scale: " + str(self.cfgScale) + ', ' + "Seed: " + '-1, ' + "Size: " + str(self.width) + 'x' + str(self.height) + ', ' + "Model hash: " + self.modelHash
-        return generateInfo
+        global firstRes
+        return firstRes.info
     def handleInterrupt(self):
         print("interrupt")
         global isGeneratingForever 
@@ -83,14 +74,6 @@ class Script(scripts.Script):
         print("p.height",p.height)
         print("p.cfg_scale",p.cfg_scale)
         print("p.model_hash",shared.sd_model.sd_model_hash)
-        self.prompt = p.prompt
-        self.negativePrompt = p.negative_prompt
-        self.samplingSteps = p.steps
-        self.samplerName = p.sampler_name
-        self.width = p.width
-        self.height = p.height
-        self.cfgScale = p.cfg_scale
-        self.modelHash = shared.sd_model.sd_model_hash
 
         global isGeneratingForever
         if isGeneratingForever == False:
@@ -99,6 +82,8 @@ class Script(scripts.Script):
         global numOfGeneratingForever
         with queue_lock:
             res = process_images(p)
+        global firstRes
+        firstRes = res
         if numOfGeneratingForever == 0:
            numOfGeneratingForever += 1
            _thread.start_new_thread(forever,(p,))
