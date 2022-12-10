@@ -3,7 +3,7 @@ import logging
 import gradio as gr
 import modules.scripts as scripts
 from modules.ui import *
-from modules.processing import process_images
+from modules.processing import StableDiffusionProcessingTxt2Img, process_images
 import _thread
 import threading
 logger = logging.getLogger(__name__)
@@ -12,27 +12,43 @@ queue_lock = threading.Lock()
 isGeneratingForever = False
 numOfGeneratingForever = 0
 firstRes =None
+sd_model_hash = None
 
 def forever(p):
         global isGeneratingForever
         while isGeneratingForever:
             time.sleep(0.1)
             with queue_lock:
+               print("begin torch_gc processing(shared.state.begin())")
                shared.state.begin()
+               print("torch_gc processing(shared.state.begin()) done")
                p.seed = -1
                p.n_iter = 1
                p.sd_model = shared.sd_model
-               print("sampler",p.sampler)
+               print("begin process_images")
                process_images(p)
+               print("process_images done")
+               print("begin torch_gc processing(shared.state.end())")
                shared.state.end()
-            
-
-
-
+               print("torch_gc processing(shared.state.end()) done")
 class Script(scripts.Script):
     def handleInfoButtonClick(self):
         global firstRes
-        return firstRes.info
+        global sd_model_hash
+        if firstRes is not None:
+            print("processing:",type(firstRes))
+            if isinstance(firstRes,StableDiffusionProcessingTxt2Img):#txt2img型
+                if firstRes.enable_hr == False:
+                    info = firstRes.prompt + '\n' + "Negative prompt: "+firstRes.negative_prompt + '\n' + "Steps: " + str(firstRes.steps) + ', ' + "Sampler: " + firstRes.sampler_name + ', ' + "CFG scale: " + str(firstRes.cfg_scale) + ', ' + "Seed: " + "-1" + ', ' + "Size: " + str(firstRes.width) + "x" + str(firstRes.height) + ", " + "Model hash: " + sd_model_hash
+                    return info
+                else:
+                    info = firstRes.prompt + '\n' + "Negative prompt: "+firstRes.negative_prompt + '\n' + "Steps: " + str(firstRes.steps) + ', ' + "Sampler: " + firstRes.sampler_name + ', ' + "CFG scale: " + str(firstRes.cfg_scale) + ', ' + "Seed: " + "-1" + ', ' + "Size: " + str(firstRes.width) + "x" + str(firstRes.height) + ", " + "Model hash: " + sd_model_hash + ", " + "Denoising strength: " + str(firstRes.denoising_strength) + ', ' + "First pass size: " + str(firstRes.firstphase_width) + 'x' + str(firstRes.firstphase_height)
+                    return info 
+            else:#img2img型
+                info = firstRes.prompt + '\n' + "Negative prompt: "+firstRes.negative_prompt + '\n' + "Steps: " + str(firstRes.steps) + ', ' + "Sampler: " + firstRes.sampler_name + ', ' + "CFG scale: " + str(firstRes.cfg_scale) + ', ' + "Seed: " + "-1" + ', ' + "Size: " + str(firstRes.width) + "x" + str(firstRes.height) + ", " + "Model hash: " + sd_model_hash + ", " + "Denoising strength: " + str(firstRes.denoising_strength) + ', ' + "Mask blur: " + str(firstRes.mask_blur)
+                return info
+        else:
+            return "No info"
     def handleInterrupt(self):
         print("interrupt")
         global isGeneratingForever 
@@ -66,14 +82,16 @@ class Script(scripts.Script):
             interruptButton,
             generateInfoText,
             infoButton):
-        print("p.prompt_first",p.prompt)
-        print("p.negative_prompt",p.negative_prompt)
-        print("p.steps",p.steps)
-        print("p.sampler_name",p.sampler_name)
-        print("p.width",p.width)
-        print("p.height",p.height)
-        print("p.cfg_scale",p.cfg_scale)
-        print("p.model_hash",shared.sd_model.sd_model_hash)
+        # print("p.prompt_first",p.prompt)
+        # print("p.negative_prompt",p.negative_prompt)
+        # print("p.steps",p.steps)
+        # print("p.sampler_name",p.sampler_name)
+        # print("p.width",p.width)
+        # print("p.height",p.height)
+        # print("p.cfg_scale",p.cfg_scale)
+        # print("p.model_hash",shared.sd_model.sd_model_hash)
+        global firstRes
+        firstRes = p
 
         global isGeneratingForever
         if isGeneratingForever == False:
@@ -82,8 +100,10 @@ class Script(scripts.Script):
         global numOfGeneratingForever
         with queue_lock:
             res = process_images(p)
-        global firstRes
-        firstRes = res
+            global sd_model_hash
+            sd_model_hash = res.sd_model_hash
+        print("isGeneratingForever:",isGeneratingForever)
+        print("numOfGeneratingForever:",numOfGeneratingForever)
         if numOfGeneratingForever == 0:
            numOfGeneratingForever += 1
            _thread.start_new_thread(forever,(p,))
