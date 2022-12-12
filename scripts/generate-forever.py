@@ -6,6 +6,7 @@ from modules.ui import *
 from modules.processing import StableDiffusionProcessingTxt2Img, process_images
 import _thread
 import threading
+from modules import script_callbacks
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 queue_lock = threading.Lock()
@@ -13,12 +14,14 @@ isGeneratingForever = False
 numOfGeneratingForever = 0
 firstRes =None
 sd_model_hash = None
+foreverState = "no forever task"
 
 def forever(p):
         global isGeneratingForever
         while isGeneratingForever:
             time.sleep(0.1)
             with queue_lock:
+               print("isGeneratingForever:",isGeneratingForever)
                print("begin torch_gc processing(shared.state.begin())")
                shared.state.begin()
                print("torch_gc processing(shared.state.begin()) done")
@@ -54,6 +57,7 @@ class Script(scripts.Script):
         global isGeneratingForever 
         global numOfGeneratingForever
         isGeneratingForever = False
+        print("isGeneratingForever",isGeneratingForever)
         numOfGeneratingForever = 0
 
     def returnOneimg(p):
@@ -112,3 +116,23 @@ class Script(scripts.Script):
            print("start new thread")
            _thread.start_new_thread(forever,(p,))
         return res
+def refreshForeverState():
+    global foreverState
+    if isGeneratingForever:
+        print("numOfGeneratingForever:",numOfGeneratingForever)
+        foreverState = "forever running"
+       
+    else:
+        print("numOfGeneratingForever:",numOfGeneratingForever)
+        foreverState = "no forever task"
+    return foreverState
+def on_ui_tabs():
+    with gr.Blocks(analytics_enabled=False) as images_history:
+        gr.Textbox(value = "state",elem_id="forever_state") 
+    return (images_history , "Forever", "forever")
+def on_ui_settings():
+    global foreverState
+    section = ('forever', "Generate Forever")
+    shared.opts.add_option("forever-state", shared.OptionInfo(foreverState, "Forever State", gr.Textbox,{"interactive":False},refresh=refreshForeverState,section=section))
+script_callbacks.on_ui_settings(on_ui_settings)
+# script_callbacks.on_ui_tabs(on_ui_tabs)
