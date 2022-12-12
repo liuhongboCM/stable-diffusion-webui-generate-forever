@@ -99,12 +99,16 @@ class Script(scripts.Script):
             isGeneratingForever = True
         global numOfGeneratingForever
         with queue_lock:
+            print("process first image")
             res = process_images(p)
+            print("first image process done")
             global sd_model_hash
             sd_model_hash = res.sd_model_hash
         print("isGeneratingForever:",isGeneratingForever)
         print("numOfGeneratingForever:",numOfGeneratingForever)
         if numOfGeneratingForever == 0:
            numOfGeneratingForever += 1
+           print("numOfGeneratingForever:",numOfGeneratingForever)
+           print("start new thread")
            _thread.start_new_thread(forever,(p,))
         return res
