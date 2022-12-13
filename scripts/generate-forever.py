@@ -1,102 +1,163 @@
 from __future__ import annotations
 import logging
+import json
 import gradio as gr
 import modules.scripts as scripts
 from modules.ui import *
 from modules.processing import StableDiffusionProcessingTxt2Img, process_images
 import _thread
 import threading
-from modules import script_callbacks
+import time
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 queue_lock = threading.Lock()
 isGeneratingForever = False
 numOfGeneratingForever = 0
-firstRes =None
+process_info = None
 sd_model_hash = None
-foreverState = "no forever task"
+taskId = ""
+foreverState = ""
 
-def forever(p):
+
+
+class Script(scripts.Script):
+    foreverPath = './outputs/tasks/'
+    def generateTaskId(self):
+        global taskId
+        taskId = str((lambda:int(round(time.time() * 1000)))())
+        print("taskId:",taskId)
+        f = open('task_status.log','w')
+        f.write(taskId)
+        f.close()
+    def forever(self,p):
         global isGeneratingForever
+        global foreverState
         while isGeneratingForever:
+            foreverState = "forever task running"
             time.sleep(0.1)
             with queue_lock:
-               print("isGeneratingForever:",isGeneratingForever)
-               print("begin torch_gc processing(shared.state.begin())")
-               shared.state.begin()
-               print("torch_gc processing(shared.state.begin()) done")
-               p.seed = -1
-               p.n_iter = 1
-               p.sd_model = shared.sd_model
-               print("begin process_images")
-               process_images(p)
-               print("process_images done")
-               print("begin torch_gc processing(shared.state.end())")
-               shared.state.end()
-               print("torch_gc processing(shared.state.end()) done")
-class Script(scripts.Script):
+                print("begin torch_gc processing(shared.state.begin())")
+                shared.state.begin()
+                print("torch_gc processing(shared.state.begin()) done")
+                p.seed = -1
+                p.n_iter = 1
+                p.sd_model = shared.sd_model
+                print("begin process_images")
+                process_images(p)
+                print("process_images done")
+                print("begin torch_gc processing(shared.state.end())")
+                shared.state.end()
+                print("torch_gc processing(shared.state.end()) done")
+        foreverState = "no forever task"
+
     def handleInfoButtonClick(self):
-        global firstRes
+        global process_info
         global sd_model_hash
-        if firstRes is not None:
-            print("processing:",type(firstRes))
-            if isinstance(firstRes,StableDiffusionProcessingTxt2Img):#txt2img型
-                if firstRes.enable_hr == False:
-                    info = firstRes.prompt + '\n' + "Negative prompt: "+firstRes.negative_prompt + '\n' + "Steps: " + str(firstRes.steps) + ', ' + "Sampler: " + firstRes.sampler_name + ', ' + "CFG scale: " + str(firstRes.cfg_scale) + ', ' + "Seed: " + "-1" + ', ' + "Size: " + str(firstRes.width) + "x" + str(firstRes.height) + ", " + "Model hash: " + sd_model_hash
-                    return info
+        global taskId
+        global foreverState
+        if process_info is not None:
+            print("processing:", type(process_info))
+            if isinstance(process_info, StableDiffusionProcessingTxt2Img):  # txt2img型
+                if process_info.enable_hr == False:
+                    info = "{}\nNegative prompt: {}\nSteps: {}, Sampler: {}, CFG scale: {}, Seed: {}, Size: {}x{}, Model hash: {}".format(
+                        process_info.prompt,
+                        process_info.negative_prompt,
+                        process_info.steps,
+                        process_info.sampler_name,
+                        process_info.cfg_scale,
+                        -1,
+                        process_info.width,
+                        process_info.height,
+                        sd_model_hash
+                    )
+                    return info,taskId,foreverState,self.foreverPath + taskId
                 else:
-                    info = firstRes.prompt + '\n' + "Negative prompt: "+firstRes.negative_prompt + '\n' + "Steps: " + str(firstRes.steps) + ', ' + "Sampler: " + firstRes.sampler_name + ', ' + "CFG scale: " + str(firstRes.cfg_scale) + ', ' + "Seed: " + "-1" + ', ' + "Size: " + str(firstRes.width) + "x" + str(firstRes.height) + ", " + "Model hash: " + sd_model_hash + ", " + "Denoising strength: " + str(firstRes.denoising_strength) + ', ' + "First pass size: " + str(firstRes.firstphase_width) + 'x' + str(firstRes.firstphase_height)
-                    return info 
-            else:#img2img型
-                info = firstRes.prompt + '\n' + "Negative prompt: "+firstRes.negative_prompt + '\n' + "Steps: " + str(firstRes.steps) + ', ' + "Sampler: " + firstRes.sampler_name + ', ' + "CFG scale: " + str(firstRes.cfg_scale) + ', ' + "Seed: " + "-1" + ', ' + "Size: " + str(firstRes.width) + "x" + str(firstRes.height) + ", " + "Model hash: " + sd_model_hash + ", " + "Denoising strength: " + str(firstRes.denoising_strength) + ', ' + "Mask blur: " + str(firstRes.mask_blur)
-                return info
+                    info = "{}\nNegative prompt: {}\nSteps: {}, Sampler: {}, CFG scale: {}, Seed: {}, Size: {}x{}, Model hash: {}, Denoising strength: {}, First pass size: {}x{}".format(
+                        process_info.prompt,
+                        process_info.negative_prompt,
+                        process_info.steps,
+                        process_info.sampler_name,
+                        process_info.cfg_scale,
+                        -1,
+                        process_info.width,
+                        process_info.height,
+                        sd_model_hash,
+                        process_info.denoising_strength,
+                        process_info.firstphase_width,
+                        process_info.firstphase_height
+                    )
+                    return info,taskId,foreverState,self.foreverPath + taskId
+            else:  # img2img型
+                info = "{}\nNegative prompt: {}\nSteps: {}, Sampler: {}, CFG scale: {}, Seed: {}, Size: {}x{}, Model hash: {}, Denoising strength: {}, Mask blur: {}".format(
+                        process_info.prompt,
+                        process_info.negative_prompt,
+                        process_info.steps,
+                        process_info.sampler_name,
+                        process_info.cfg_scale,
+                        -1,
+                        process_info.width,
+                        process_info.height,
+                        sd_model_hash,
+                        process_info.denoising_strength,
+                        process_info.mask_blur
+                    )
+                return info,taskId,foreverState,self.foreverPath + taskId
         else:
-            return "No info"
+            return "No info",taskId,foreverState,self.foreverPath + taskId
+
     def handleInterrupt(self):
         print("interrupt")
-        global isGeneratingForever 
+        global isGeneratingForever
         global numOfGeneratingForever
         isGeneratingForever = False
-        print("isGeneratingForever",isGeneratingForever)
         numOfGeneratingForever = 0
+        f = open('task_status.log','w')
+        f.close()
 
     def returnOneimg(p):
         return process_images(p)
 
     def title(self):
         return "GenerateForever"
+
     def ui(self, is_img2img):
+        global foreverState
+        global taskId
         with gr.Group():
             with gr.Accordion("Generate Forever", open=True):
-                interruptButton = gr.Button(value = "Interrupt",elem_id = "interruptButton")
-                interruptButton.click(self.handleInterrupt,[],[])
-                generateInfoText = gr.Text(label = "Generate Info",interactive = False)
-                infoButton = gr.Button(value = "Refresh forever info",variant = 'primary')
-                infoButton.click(self.handleInfoButtonClick,inputs = [],outputs = [generateInfoText])
+                interruptButton = gr.Button(
+                    value="Interrupt", elem_id="interruptButton")
+                interruptButton.click(self.handleInterrupt, [], [])
+                foreverStateText = gr.Textbox(label = "Forever State",value = foreverState,elem_id = "forever_state_text",interactive = False)
+                taskIdText = gr.Textbox(label = "Task ID",interactive=False)
+                generateInfoText = gr.Text(
+                    label="Generate Info", interactive=False)
+                savePathText = gr.Textbox(label = "Images Save Path",value = self.foreverPath + taskId,interactive = False)
+                infoButton = gr.Button(
+                    value="Refresh forever info", variant='primary')
+                infoButton.click(self.handleInfoButtonClick,
+                                 inputs=[], outputs=[generateInfoText,taskIdText,foreverStateText,savePathText])
 
-
-                   
         return [
             interruptButton,
             generateInfoText,
-            infoButton
+            infoButton,
+            taskIdText,
+            foreverStateText,
+            savePathText
         ]
-    
-    def run(self, p, 
+
+    def run(self, p,
             interruptButton,
             generateInfoText,
-            infoButton):
-        # print("p.prompt_first",p.prompt)
-        # print("p.negative_prompt",p.negative_prompt)
-        # print("p.steps",p.steps)
-        # print("p.sampler_name",p.sampler_name)
-        # print("p.width",p.width)
-        # print("p.height",p.height)
-        # print("p.cfg_scale",p.cfg_scale)
-        # print("p.model_hash",shared.sd_model.sd_model_hash)
-        global firstRes
-        firstRes = p
-
+            infoButton,
+            taskIdText,
+            foreverStateText,
+            savePathText):
+        global process_info
+        process_info = p
+        print(process_info.outpath_samples)
+        print(process_info.outpath_grids)
         global isGeneratingForever
         if isGeneratingForever == False:
             print("change isGeneratingForever True!")
@@ -108,31 +169,25 @@ class Script(scripts.Script):
             print("first image process done")
             global sd_model_hash
             sd_model_hash = res.sd_model_hash
-        print("isGeneratingForever:",isGeneratingForever)
-        print("numOfGeneratingForever:",numOfGeneratingForever)
+        print("isGeneratingForever:", isGeneratingForever)
+        print("numOfGeneratingForever:", numOfGeneratingForever)
         if numOfGeneratingForever == 0:
-           numOfGeneratingForever += 1
-           print("numOfGeneratingForever:",numOfGeneratingForever)
-           print("start new thread")
-           _thread.start_new_thread(forever,(p,))
+            numOfGeneratingForever += 1
+            print("numOfGeneratingForever:", numOfGeneratingForever)
+            print("start new thread")
+            self.generateTaskId()
+            import os
+            dirs = self.foreverPath + taskId
+            if not os.path.exists(dirs):
+                os.makedirs(dirs)
+            p.outpath_samples = dirs
+            _thread.start_new_thread(self.forever, (p,))
         return res
-def refreshForeverState():
-    global foreverState
-    if isGeneratingForever:
-        print("numOfGeneratingForever:",numOfGeneratingForever)
-        foreverState = "forever running"
-       
-    else:
-        print("numOfGeneratingForever:",numOfGeneratingForever)
-        foreverState = "no forever task"
-    return foreverState
+
+
 def on_ui_tabs():
     with gr.Blocks(analytics_enabled=False) as images_history:
         gr.Textbox(value = "state",elem_id="forever_state") 
     return (images_history , "Forever", "forever")
-def on_ui_settings():
-    global foreverState
-    section = ('forever', "Generate Forever")
-    shared.opts.add_option("forever-state", shared.OptionInfo(foreverState, "Forever State", gr.Textbox,{"interactive":False},refresh=refreshForeverState,section=section))
-script_callbacks.on_ui_settings(on_ui_settings)
-# script_callbacks.on_ui_tabs(on_ui_tabs)
+
+
