@@ -27,9 +27,9 @@ class Script(scripts.Script):
         fConfig = open('config.json','r')
         configDic = json.load(fConfig)
         print("machine-id:",configDic['machine-id'])
-        # taskId = configDic['machine-id'] + '-' + str((lambda:int(round(time.time() * 1000)))())
+        taskId = configDic['machine-id'] + '-' + str((lambda:int(round(time.time() * 1000)))())
         #暂时写死
-        taskId = "sd05-1670982305082"
+        # taskId = "sd05-1670982305082"
         print("taskId:",taskId)
         f = open('task_status.log','w')
         f.write(taskId)
