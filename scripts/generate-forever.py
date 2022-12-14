@@ -9,6 +9,7 @@ import _thread
 import threading
 import time
 import os
+from modules import script_callbacks
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 queue_lock = threading.Lock()
@@ -201,49 +202,12 @@ class Script(scripts.Script):
 
 
 
-processListId=[]
-processIndex = 0
-def on_ui_tabs():
-    with gr.Blocks(analytics_enabled=False) as generate_forever:
-        with gradio.Column(elem_id = "forever_batch"):
-            processDropDown = gradio.Dropdown(label = "Tasks")
-            with gr.Blocks(title = "Task info"):
-                taskIdText = gr.Textbox(label = "Task Id",interactive = False)
-                taskInfoText = gr.Textbox(label = "Generate Info",lines = 5,interactive = False)
-                imgsSavePath = gr.Textbox(label = "Images Save Path",interactive = False)
-                
-
-
-            deleteButton = gr.Button(value = "Delete Batch",elem_id = "forever_batch_delete_btn")
-            with gradio.Column(elem_id = "forever_batch_item"):
-                with gradio.Row():
-                    promptText = gradio.Textbox(label = "Prompt",placeholder = "Prompt",lines = 2)
-                    with gradio.Column(scale = 1):
-                        getGenerateInfoButton = gradio.Button(value = "↙️",elem_id = "get_generate_info_btn")
-                        processNumber = gradio.Slider(maximum = 10000,value = 3000,label = "Batch Count",interactive = True)
-                negativePromptText = gradio.Textbox(label = "Negative Prompt",placeholder = "Negative Prompt",lines = 2)
-                with gradio.Row():
-                    samplingStepsSlider = gradio.Slider(maximum = 150,label = "Sampling Steps",value = 20,interactive = True)
-                    samplingMethodDropdown = gradio.Dropdown(choices = ["Euler a","Euler", "LMS", "Heun","DPM2","DPM2 a","DPM++ 2S a","DPM++ 2M","DPM++ SDE","DPM fast","DPM adaptive","LMS Karras","DPM2 Karras","DPM2 a Karras","DPM++ 2S a Karras","DPM++ 2M Karras","DPM++ SDE Karras","DDIM","PLMS"],label = "Sampling Method",value = "Euler a",interactive = True)
-                with gradio.Row():
-                    widthSlider = gradio.Slider(maximum = 2048,value = 512,label = "Width",interactive = True)
-                    heightSlider = gradio.Slider(maximum = 2048,value = 512,label = "Height",interactive = True)
-                    cfgScaleSlider = gradio.Slider(maximum = 30,value = 7,label = "CFG Scale",interactive = True)
-        addButton = gr.Button(value = "Add Batch",variant = "primary",elem_id = "forever_batch_add_btn")
-        
-       
-
-      
-    return (generate_forever , "Txt2Img Forever Batch", "forever batch"),
-
-
 
 
 def on_ui_settings():
     section = ('generate-forever', "Generate Forever")
     shared.opts.add_option("machine-id", shared.OptionInfo("", "set an machine id", section=section))
 
-script_callbacks.on_ui_tabs(on_ui_tabs)
 script_callbacks.on_ui_settings(on_ui_settings)
 
 
