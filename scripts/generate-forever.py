@@ -10,9 +10,9 @@ import threading
 import time
 import os
 from modules import script_callbacks
+from modules.call_queue import queue_lock
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-queue_lock = threading.Lock()
 isGeneratingForever = False
 numOfGeneratingForever = 0
 process_info = None

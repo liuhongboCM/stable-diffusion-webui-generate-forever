@@ -10,7 +10,17 @@ function convertPromptsInfo(input){
     seed = othersSplit[3].split(': ')[1]
     width = othersSplit[4].split(': ')[1].split('x')[0]
     height = othersSplit[4].split(': ')[1].split('x')[1]
-    return [dynamicPrompt,dynamicNegativePrompt,steps,sampler,cfgScale,width,height]
+    modelHash = ""
+    if(othersSplit.length>5){
+        if(othersSplit[5].split(': ').length>1){
+            modelHash = othersSplit[5].split(': ')[1]
+
+        }
+        
+    }
+    console.log(modelHash)
+    
+    return [dynamicPrompt,dynamicNegativePrompt,steps,sampler,cfgScale,width,height,modelHash]
 
 
 
