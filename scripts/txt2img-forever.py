@@ -13,12 +13,13 @@ import os
 from modules import script_callbacks
 from modules.txt2img import txt2img
 from modules.call_queue import queue_lock
+foreverTasksLock = threading.Lock()
 foreverTasks = []
 foreverTasksIndex = []
-# statusLock = threading.Lock()
 # queueLock = threading.Lock()
 foreverPath = './outputs/tasks/'
 status = "free"#free,busy
+statusLock = threading.Lock()
 class ForeverTask():
     taskId = ""
     prompt = ""
@@ -28,13 +29,13 @@ class ForeverTask():
     width = 512
     height = 512
     cfgScale = 7
-    batchCount = 3000
-    status = "waiting"# waiting,processing,interrupted,completed
+    batchCount = 10000
+    status = "waiting"# waiting,processing,paused,completed
     generateInfo=""
     seed = -1
     modelHash = ""
     imgsSavePath = ""
-    oringinalBatchCount = 3000
+    oringinalBatchCount = 10000
     def __init__(self,taskId,prompt,negativePrompt,samplingSteps,samplingMethod,width,height,cfgScale,batchCount,generateInfo,modelHash,imgsSavePath):
         self.taskId = taskId
         self.prompt = prompt
@@ -56,7 +57,6 @@ class ForeverMonitor(threading.Thread):
     def monitor(self):
         while True:
             time.sleep(1)
-            print("monitoring")
             global status
             if status == "free":
                 global foreverTasks
@@ -88,7 +88,8 @@ def processBatch(task):
     while task.batchCount > 0 and task.status == "processing":
         time.sleep(0.1)
         with queue_lock:
-            status = "busy"
+            with statusLock:
+                status = "busy"
             task.batchCount -= 1
             # txt2img(prompt = task.prompt,negative_prompt = task.negativePrompt,prompt_style = None,prompt_style2 = None,steps = task.samplingSteps,sampler_index = 1,restore_faces = False,tiling = False,n_iter = 1,batch_size = 1,cfg_scale = task.cfgScale,seed = -1,subseed= -1, subseed_strength= 0, seed_resize_from_h= 0, seed_resize_from_w= 0, seed_enable_extras= False, height= task.height, width= task.width, enable_hr= False, denoising_strength= 0.7, firstphase_width= 0, firstphase_height= 0)
             p = StableDiffusionProcessingTxt2Img(
@@ -130,7 +131,8 @@ def processBatch(task):
             shared.total_tqdm.clear()
     if task.batchCount == 0:
         task.status = "completed"
-    status = "free"
+    with statusLock:
+        status = "free"
 
 
 def addForeverBatch(prompt,negativePrompt,samplingSteps,samplingMethod,width,height,cfgScale,batchCount,modelHash):
@@ -147,9 +149,10 @@ def addForeverBatch(prompt,negativePrompt,samplingSteps,samplingMethod,width,hei
     global foreverPath
     imgsSavePath = foreverPath + taskId
     newForeverTask = ForeverTask(taskId,prompt,negativePrompt,samplingSteps,samplingMethod,width,height,cfgScale,batchCount,generateInfo,modelHash,imgsSavePath)
-    foreverTasks.append(newForeverTask)
-    foreverTasksIndex.append(taskId)
-    return "","",20,"Euler a",512,512,7,3000,gr.update(choices = foreverTasksIndex,interactive = True),""
+    with foreverTasksLock:
+        foreverTasks.append(newForeverTask)
+        foreverTasksIndex.append(taskId)
+    return "","",20,"Euler a",512,512,7,10000,gr.update(choices = foreverTasksIndex,interactive = True),""
 def getGenerateInfo(prompt,negativePrompt,samplingSteps,samplingMethod,cfgScale,width,height,modelHash):
     if modelHash != "":
         info = "{}\nNegative prompt: {}\nSteps: {}, Sampler: {}, CFG scale: {}, Seed: {}, Size: {}x{}, Model hash: {}".format(
@@ -176,36 +179,113 @@ def getGenerateInfo(prompt,negativePrompt,samplingSteps,samplingMethod,cfgScale,
                         )
     return info
 def findTask(taskId):
-    global foreverTasks
-    for task in foreverTasks:
-        if task.taskId == taskId:
-            return task
+    with foreverTasksLock:
+        global foreverTasks
+        for task in foreverTasks:
+            if task.taskId == taskId:
+                return task
     print("error:can't find taskId:",taskId)
     return None
 def showTaskInfo(taskId):
     tempTask = findTask(taskId)
-    print(tempTask)
-    return tempTask.taskId,tempTask.status,tempTask.generateInfo,tempTask.imgsSavePath
-    
+    if tempTask.status == "paused":
+        return tempTask.taskId,tempTask.status,tempTask.generateInfo,tempTask.imgsSavePath,tempTask.batchCount,gr.update(visible = True),gr.update(visible = False),gr.update(visible = True),gr.update(visible = False),gr.update(visible = True)
+    elif tempTask.status == "processing":
+        return tempTask.taskId,tempTask.status,tempTask.generateInfo,tempTask.imgsSavePath,tempTask.batchCount,gr.update(visible = True),gr.update(visible = True),gr.update(visible = False),gr.update(visible = False),gr.update(visible = True)
+    elif tempTask.status == "completed":
+        return tempTask.taskId,tempTask.status,tempTask.generateInfo,tempTask.imgsSavePath,tempTask.batchCount,gr.update(visible = True),gr.update(visible = False),gr.update(visible = False),gr.update(visible = False),gr.update(visible = True)
+    else:
+        return tempTask.taskId,tempTask.status,tempTask.generateInfo,tempTask.imgsSavePath,tempTask.batchCount,gr.update(visible = True),gr.update(visible = True),gr.update(visible = False),gr.update(visible = True),gr.update(visible = True)
+def delete(taskId):
+    task = findTask(taskId)
+    if task is not None:
+        if task.status == "processing":
+            task.status = "paused"
+            global status
+            while status == "busy":
+                time.sleep(0.5)
+        global foreverTasks
+        global foreverTasksIndex
+        with foreverTasksLock:
+            foreverTasks.remove(task)
+            foreverTasksIndex.remove(taskId)
+    return gr.update(choices = foreverTasksIndex,interactive = True), "","","","","",gr.update(visible = False),gr.update(visible = False) ,gr.update(visible = False) ,gr.update(visible = False)         
+def insert(taskId):
+    task = findTask(taskId)
+    if task is not None:
+        global foreverTasks
+        global status
+        global foreverTasksIndex
+        findProcessing = False
+        with foreverTasksLock:
+            for item in foreverTasks:
+                if item.status == "processing":
+                    findProcessing = True
+                    foreverTasks.remove(task)
+                    foreverTasks.insert(0,task)
+                    foreverTasksIndex.remove(taskId)
+                    foreverTasksIndex.insert(0,taskId)
+                    item.status = "waiting"
+                    while status == "busy":
+                        time.sleep(0.5)
+                    break
+            if findProcessing == False:
+                foreverTasks.remove(task)
+                foreverTasks.insert(0,task)
+                foreverTasksIndex.remove(taskId)
+                foreverTasksIndex.insert(0,taskId)
+    return gr.update(choices = foreverTasksIndex,value = taskId,interactive = True),taskId,task.status,task.batchCount,gr.update(visible = False)
+def pause(taskId):
+    task = findTask(taskId)
+    if task is not None:
+        task.status = "paused"
+        return task.status,task.batchCount,gr.update(visible = False),gr.update(visible = True),gr.update(visible = False)
+    else:
+        raise Error("can't find a task of taskId:",taskId)
+def start(taskId):
+    task = findTask(taskId)
+    if task is not None:
+        task.status = "waiting"
+        return task.status,gr.update(visible = True),gr.update(visible = False),gr.update(visible = True)
+    else:
+        raise Error("can't find a task of taskId:",taskId)
+def syncTasks():
+    global foreverTasksIndex
+    return gr.update(choices = foreverTasksIndex)
+def refreshLeftBatchCountAndStatus(taskId):
+    task = findTask(taskId)
+    if task is not None:
+        return task.batchCount,task.status
+    else:
+        raise Error("can't find a task of taskId:",taskId)                    
+
+            
 
 def on_ui_tabs():
     with gr.Blocks(analytics_enabled=False) as generate_forever:
         with gr.Column(elem_id = "forever_batch"):
+            syncButton = gr.Button(value = "Synchronize Tasks",variant = "primary")
             with gr.Blocks(title = "Task info"):
                 processDropDown = gr.Dropdown(label = "Tasks")
                 taskIdText = gr.Textbox(label = "Task Id",interactive = False)
                 taskStatusText = gr.Textbox(label = "Task Status",interactive = False)
+                with gr.Row():
+                    batchCountLeftText = gr.Textbox(label = "Counts Left",interactive = False)
+                    refreshBatchCountAndStatusButton = gr.Button(value = "Refresh Left BatchCount And Status",visible = False)
                 taskInfoText = gr.Textbox(label = "Generate Info",lines = 5,interactive = False)
                 imgsSavePathText = gr.Textbox(label = "Images Save Path",interactive = False)
-                with gr.Row():
-                    
-                    deleteButton = gr.Button(value = "Delete Batch",elem_id = "forever_batch_delete_btn")
+                with gr.Column():
+                    insertButton = gr.Button(value = "Insert",visible = False)
+                    pauseButtoon = gr.Button(value = "Pause",visible = False)
+                    startButton = gr.Button(value = "Start",visible = False)
+                    deleteButton = gr.Button(value = "Delete Batch",elem_id = "forever_batch_delete_btn",visible = False)
+
             with gr.Column(elem_id = "forever_batch_item"):
                 with gr.Row():
                     promptText = gr.Textbox(label = "Prompt",placeholder = "Prompt",lines = 2)
                     with gr.Column(scale = 1):
                         getGenerateInfoButton = gr.Button(value = "↙️",elem_id = "convert_generate_info_btn")
-                        batchCountSlider = gr.Slider(maximum = 10000,value = 3000,label = "Batch Count",interactive = True)
+                        batchCountSlider = gr.Slider(maximum = 10000,value = 10000,label = "Batch Count",interactive = True)
                 negativePromptText = gr.Textbox(label = "Negative Prompt",placeholder = "Negative Prompt",lines = 2,interactive = True)
                 with gr.Row():
                     samplingStepsSlider = gr.Slider(maximum = 150,label = "Sampling Steps",value = 20,interactive = True)
@@ -220,7 +300,13 @@ def on_ui_tabs():
         addButton = gr.Button(value = "Add Batch",variant = "primary",elem_id = "forever_batch_add_btn")
         getGenerateInfoButton.click(fn=None,_js = "convertPromptsInfo",inputs = [promptText],outputs = [promptText,negativePromptText,samplingStepsSlider,samplingMethodDropdown,cfgScaleSlider,widthSlider,heightSlider,modelHashText])
         addButton.click(fn = addForeverBatch,inputs=[promptText,negativePromptText,samplingStepsSlider,samplingMethodDropdown,widthSlider,heightSlider,cfgScaleSlider,batchCountSlider,modelHashText],outputs=[promptText,negativePromptText,samplingStepsSlider,samplingMethodDropdown,widthSlider,heightSlider,cfgScaleSlider,batchCountSlider,processDropDown,modelHashText])
-        processDropDown.change(fn = showTaskInfo,inputs=[processDropDown],outputs=[taskIdText,taskStatusText,taskInfoText,imgsSavePathText])
+        processDropDown.change(fn = showTaskInfo,inputs=[processDropDown],outputs=[taskIdText,taskStatusText,taskInfoText,imgsSavePathText,batchCountLeftText,deleteButton,pauseButtoon,startButton,insertButton,refreshBatchCountAndStatusButton])
+        deleteButton.click(fn = delete,inputs = [taskIdText],outputs = [processDropDown,taskIdText,taskStatusText,batchCountLeftText,taskInfoText,imgsSavePathText,startButton,pauseButtoon,insertButton,deleteButton])
+        insertButton.click(fn = insert,inputs = [taskIdText],outputs = [processDropDown,taskIdText,taskStatusText,batchCountLeftText,insertButton])
+        pauseButtoon.click(fn = pause,inputs = [taskIdText],outputs = [taskStatusText,batchCountLeftText,pauseButtoon,startButton,insertButton])
+        startButton.click(fn = start,inputs = [taskIdText],outputs = [taskStatusText,pauseButtoon,startButton,insertButton])
+        syncButton.click(fn = syncTasks,inputs = [],outputs = [processDropDown])
+        refreshBatchCountAndStatusButton.click(fn = refreshLeftBatchCountAndStatus,inputs = [taskIdText],outputs = [batchCountLeftText,taskStatusText])
     return (generate_forever , "txt2img Forever", "forever batch"),
 
 script_callbacks.on_ui_tabs(on_ui_tabs)
