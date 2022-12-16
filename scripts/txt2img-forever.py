@@ -16,10 +16,10 @@ from modules.call_queue import queue_lock
 foreverTasksLock = threading.Lock()
 foreverTasks = []
 foreverTasksIndex = []
-# queueLock = threading.Lock()
 foreverPath = './outputs/tasks/'
 status = "free"#free,busy
 statusLock = threading.Lock()
+taskStatusFLock = threading.Lock()
 class ForeverTask():
     taskId = ""
     prompt = ""
@@ -84,6 +84,10 @@ def processBatch(task):
     saveDir = task.imgsSavePath
     if not os.path.exists(saveDir):
         os.makedirs(saveDir)
+    with taskStatusFLock:
+        taskIdF = open("task_status.log",'w')
+        taskIdF.write(task_id)
+        taskIdF.close()
     global status
     while task.batchCount > 0 and task.status == "processing":
         time.sleep(0.1)
@@ -133,6 +137,10 @@ def processBatch(task):
         task.status = "completed"
     with statusLock:
         status = "free"
+    with taskStatusFLock:
+        taskIdF = open("task_status.log",'w')
+        taskIdF.write('')
+        taskIdF.close()
 
 
 def addForeverBatch(prompt,negativePrompt,samplingSteps,samplingMethod,width,height,cfgScale,batchCount,modelHash):
