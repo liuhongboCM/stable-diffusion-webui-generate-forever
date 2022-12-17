@@ -80,7 +80,7 @@ def processBatch(task):
     fConfig = open('config.json','r')
     configDic = json.load(fConfig)
     print("machine-id:",configDic['machine-id'])
-    task_id = configDic['machine-id'] + '-' + task.taskId
+    task_id = task.taskId
     saveDir = task.imgsSavePath
     if not os.path.exists(saveDir):
         os.makedirs(saveDir)
@@ -217,7 +217,7 @@ def delete(taskId):
         with foreverTasksLock:
             foreverTasks.remove(task)
             foreverTasksIndex.remove(taskId)
-    return gr.update(choices = foreverTasksIndex,interactive = True), "","","","","",gr.update(visible = False),gr.update(visible = False) ,gr.update(visible = False) ,gr.update(visible = False)         
+    return gr.update(choices = foreverTasksIndex,interactive = True), "","","","","",gr.update(visible = False),gr.update(visible = False) ,gr.update(visible = False) ,gr.update(visible = False),gr.update(visible = False)         
 def insert(taskId):
     task = findTask(taskId)
     if task is not None:
@@ -309,7 +309,7 @@ def on_ui_tabs():
         getGenerateInfoButton.click(fn=None,_js = "convertPromptsInfo",inputs = [promptText],outputs = [promptText,negativePromptText,samplingStepsSlider,samplingMethodDropdown,cfgScaleSlider,widthSlider,heightSlider,modelHashText])
         addButton.click(fn = addForeverBatch,inputs=[promptText,negativePromptText,samplingStepsSlider,samplingMethodDropdown,widthSlider,heightSlider,cfgScaleSlider,batchCountSlider,modelHashText],outputs=[promptText,negativePromptText,samplingStepsSlider,samplingMethodDropdown,widthSlider,heightSlider,cfgScaleSlider,batchCountSlider,processDropDown,modelHashText])
         processDropDown.change(fn = showTaskInfo,inputs=[processDropDown],outputs=[taskIdText,taskStatusText,taskInfoText,imgsSavePathText,batchCountLeftText,deleteButton,pauseButtoon,startButton,insertButton,refreshBatchCountAndStatusButton])
-        deleteButton.click(fn = delete,inputs = [taskIdText],outputs = [processDropDown,taskIdText,taskStatusText,batchCountLeftText,taskInfoText,imgsSavePathText,startButton,pauseButtoon,insertButton,deleteButton])
+        deleteButton.click(fn = delete,inputs = [taskIdText],outputs = [processDropDown,taskIdText,taskStatusText,batchCountLeftText,taskInfoText,imgsSavePathText,startButton,pauseButtoon,insertButton,deleteButton,refreshBatchCountAndStatusButton])
         insertButton.click(fn = insert,inputs = [taskIdText],outputs = [processDropDown,taskIdText,taskStatusText,batchCountLeftText,insertButton])
         pauseButtoon.click(fn = pause,inputs = [taskIdText],outputs = [taskStatusText,batchCountLeftText,pauseButtoon,startButton,insertButton])
         startButton.click(fn = start,inputs = [taskIdText],outputs = [taskStatusText,pauseButtoon,startButton,insertButton])
@@ -318,4 +318,9 @@ def on_ui_tabs():
     return (generate_forever , "txt2img Forever", "forever batch"),
 
 script_callbacks.on_ui_tabs(on_ui_tabs)
+def on_ui_settings():
+    section = ('generate-forever', "Generate Forever")
+    shared.opts.add_option("machine-id", shared.OptionInfo("", "set an machine id", section=section))
+
+script_callbacks.on_ui_settings(on_ui_settings)
 monitor = ForeverMonitor().start()
