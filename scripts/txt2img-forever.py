@@ -84,6 +84,9 @@ def processBatch(task):
     saveDir = task.imgsSavePath
     if not os.path.exists(saveDir):
         os.makedirs(saveDir)
+        infoTxt = open(saveDir + "/" + task.taskId + ".txt",'w')
+        infoTxt.write(task.generateInfo)
+        infoTxt.close()
     with taskStatusFLock:
         taskIdF = open("task_status.log",'w')
         taskIdF.write(task_id)
